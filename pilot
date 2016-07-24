@@ -6,8 +6,8 @@ _script_path="${0%/*}"
 _script_name="${0##*/}"
 _system=$(uname -s)
 
-CONF_FILE=${CONF_FILE-~/.pilotrc}
-[ -r "${CONF_FILE}" ] && . "${CONF_FILE}"
+CONFFILE=${CONFFILE-~/.${_script_name}rc}
+[ -r "${CONFFILE}" ] && . "${CONFFILE}"
 
 if [ -z "${DLCMD}" ]; then
   case ${_system} in
@@ -25,24 +25,25 @@ if [ -z "${DLCMD}" ]; then
 ${_script_name}: there is no download command configured for this script.
 Try something like this and then re-run this script:
 
-cat >> ${CONF_FILE}
+cat >> ${CONFFILE}
 DLCMD=\${DLCMD-${_dlcmd_suggest}}
-^D  
+^D
 EOF
   exit 2
 fi
 
 _print_usage_and_bail () {
   cat >&2 <<EOF
-pilot -- the picolisp organizational tool
-version: ${_version}
+${_script_name}, version ${_version}
 
 Usages:
 
-  pilot fetch  # download latest picolisp distro (tarball) from official server.
-  pilot get    # same thing :)
+  ${_script_name} fetch  # download latest picolisp distro (tarball) from official server.
+  ${_script_name} get    # same thing :)
 
-  pilot help   # prints this (help) message.
+  ${_script_name} extract  # extracts the distro downloaded that has the latest version.
+
+  ${_script_name} help   # prints this (help) message.
 EOF
   exit 0
 }
@@ -99,9 +100,48 @@ _fetch () {
   return
 }
 
+_extract () {
+  local tarball=$(ls -1d ${DISTRODIR}/picoLisp-*tgz 2>/dev/null |
+                     awk -F'[.-]' '{print $2, $3, $4, $0}' |
+                     sort -n | awk '{print $NF}' | tail -1)
+
+  [ "${tarball}" ] || {
+    echo "Expecting to find picolisp distros in \`${DISTRODIR}\`." >&2
+    echo "Found none.  Try \`${_script_name} fetch\` first.  Bailing ..." >&2
+    exit 3
+  }
+
+  local base_tarball=${tarball##*/}
+  local new_dirname=${base_tarball%.tgz}
+
+  echo "Extracting latest picoLisp tarball into current directory ..." >&2
+  rm -fr ${new_dirname}
+  tar zxf ${tarball}
+  mv picoLisp ${new_dirname}
+
+  # picoLisp needs GNU make. Help the BSDs out.
+  if echo ${_system} | grep BSD >/dev/null; then
+    MAKE=${MAKE-gmake}
+  fi
+  MAKE=${MAKE:-make}
+  echo "Next steps:" >&2
+  echo "cd ${new_dirname}" >&2
+  echo "(cd src64 && ${MAKE})" >&2
+  return
+}
+
+# $DISTRODIR is where you put your picoLisp distros (tarballs).
+DISTRODIR=${DISTRODIR:-.}
+
+# $BUILDDIR is where you extract your picoLisp distros (tarballs).
+BUILDDIR=${BUILDDIR:-.}
+
 case $1 in
  fetch | get)
-  _fetch
+  (cd ${DISTRODIR} && _fetch)
+  ;;
+ extract)
+  (cd ${BUILDDIR} && _extract)
   ;;
  *)
   _print_usage_and_bail
