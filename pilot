@@ -1,0 +1,110 @@
+#!/bin/sh
+
+_version=20160724
+
+_script_path="${0%/*}"
+_script_name="${0##*/}"
+_system=$(uname -s)
+
+CONF_FILE=${CONF_FILE-~/.pilotrc}
+[ -r "${CONF_FILE}" ] && . "${CONF_FILE}"
+
+if [ -z "${DLCMD}" ]; then
+  case ${_system} in
+   FreeBSD)
+    _dlcmd_suggest=fetch
+    ;;
+   OpenBSD)
+    _dlcmd_suggest=ftp
+    ;;
+   *)
+    _dlcmd_suggest="curl -O"
+    ;;
+  esac
+  cat >&2 <<EOF
+${_script_name}: there is no download command configured for this script.
+Try something like this and then re-run this script:
+
+cat >> ${CONF_FILE}
+DLCMD=\${DLCMD-${_dlcmd_suggest}}
+^D  
+EOF
+  exit 2
+fi
+
+_print_usage_and_bail () {
+  cat >&2 <<EOF
+pilot -- the picolisp organizational tool
+version: ${_version}
+
+Usages:
+
+  pilot fetch  # download latest picolisp distro (tarball) from official server.
+  pilot get    # same thing :)
+
+  pilot help   # prints this (help) message.
+EOF
+  exit 0
+}
+
+if [ $# -eq 0 ] || [ $1 == "help" ]; then
+  _print_usage_and_bail
+fi
+
+_fetch () {
+  # The latest picoLisp distro should always be at this URL.
+  LATEST_PIL_URL=${LATEST_PIL_URL-http://software-lab.de/picoLisp.tgz}
+
+  # This is the pathname of the file in the distro (tarball) that
+  # contains the version number.
+  VERSION_FILE_PATH=${VERSION_FILE_PATH-picoLisp/src/vers.h}
+  # For 64 bit:
+  #VERSION_FILE_PATH=${VERSION_FILE_PATH-picoLisp/src64/version.l}
+
+  # Now, download the latest tarball.
+  echo "Downloading latest picoLisp distro (tarball)." >&2
+  ${DLCMD} ${LATEST_PIL_URL} || exit 1
+
+  local base_tarball="${LATEST_PIL_URL##*/}"
+
+  # Try to extract the pil version from the contents.
+  local tmpdir=/tmp/$$-${USER}
+  mkdir -p ${tmpdir}
+  tar zxf ${base_tarball} -C ${tmpdir} ${VERSION_FILE_PATH} || {
+    echo "Could not extract the version file from the tarball.  Bailing ..." >&2
+    echo "(BTW, find the downloaded tarball at ${base_tarball}.)" >&2
+    rm -fr ${tmpdir}
+    exit 2
+  }
+  local version_file=${tmpdir}/${VERSION_FILE_PATH}
+  local pil_version=$(cat ${version_file} |
+                      awk -F'[{}]' '/ Version.+ = /{gsub(/,/,".",$2);print $2}')
+  # For 64 bit:
+  #local pil_version="$(cat ${version_file} |
+  #                     awk -F'[ ()]'
+  #                         '/\(de \*Version/ {
+  #                            v=$4;for(i=5;i<NF;i++)v=v "." $i; print v}')"
+  [ "${pil_version}" ] || {
+    echo "Could not extract the version number from the version file.  Bailing ..." >&2
+    echo "(BTW, find the downloaded tarball at ${base_tarball}.)" >&2
+    rm -fr ${tmpdir}
+    exit 3
+  }
+  rm -fr ${tmpdir}
+
+  # Rename the tarball.
+  local base_tarball_with_version="${base_tarball%.*}-${pil_version}.${base_tarball##*.}"
+  mv ${base_tarball} ${base_tarball_with_version}
+  echo "Renamed the tarball to ${base_tarball_with_version}." >&2
+  return
+}
+
+case $1 in
+ fetch | get)
+  _fetch
+  ;;
+ *)
+  _print_usage_and_bail
+  ;;
+esac
+
