@@ -1,6 +1,6 @@
 #!/bin/sh
 
-_version=20160724
+_version=20160725
 
 _script_path="${0%/*}"
 _script_name="${0##*/}"
@@ -55,11 +55,10 @@ This tool helps you organize your picolisp downloads and installs.
 Usages:
 
   ${_script_name} fetch    # Download the latest distro to \${DISTRODIR}.
-  ${_script_name} get      # Synonym for \`fetch\`.
-
-  ${_script_name} extract  # Extract the lastest distro (found in \${DISTRODIR}) into \${BUILDDIR}.
-
+  ${_script_name} get      # Synonym for \`${_script_name} fetch\`.
+  ${_script_name} extract  # Extract the latest distro (found in \${DISTRODIR}) into \${BUILDDIR}.
   ${_script_name} install  # Install the latest build from \${BUILDDIR} into \${PREFIX}.
+  ${_script_name} relink   # Relink the pil script to a previously installed version of picolisp.
 
 Configuration:
 (Some of these are defined in ${CONFFILE})
@@ -155,6 +154,16 @@ _extract () {
   return
 }
 
+_do_relink () {
+  local installed_dir="$1"
+  ${reconpre} ln -fs ${installed_dir}/bin/picolisp ${PREFIX}/bin || exit 45
+  ${reconpre} ln -fs ${installed_dir}/bin/pil ${PREFIX}/bin || exit 46
+  ${reconpre} ln -fhs ${installed_dir} ${PREFIX}/lib/picolisp || exit 47
+  ${reconpre} ln -fs ${installed_dir}/man/man1/picolisp.1 ${PREFIX}/share/man/man1 || exit 48
+  ${reconpre} ln -fs ${installed_dir}/man/man1/pil.1 ${PREFIX}/share/man/man1 || exit 49
+  return
+}
+
 _install () {
   local install_dir=$(ls -1d ${BUILDDIR}/picoLisp-*/ 2>/dev/null |
                          awk -F'[.-]' '{print $2, $3, $4, $0}' |
@@ -166,12 +175,7 @@ _install () {
   }
   install_dir=${install_dir%/}
 
-  local reconpre=
-  if [ "$RECON" ]; then
-    reconpre=echo
-  else
-    echo "Installing ${install_dir} to ${PREFIX} ..." >&2
-  fi
+  [ "$RECON" ] || echo "Installing ${install_dir} to ${PREFIX} ..." >&2
 
   # Ensure prefix tree.
   ${reconpre} mkdir -p ${PREFIX}/bin ${PREFIX}/lib ${PREFIX}/libexec ${PREFIX}/share/man/man1 || exit 42
@@ -190,13 +194,55 @@ _install () {
     sed 's?/usr?'${PREFIX}'?g' ${install_dir}/bin/pil > ${installed_dir}/bin/pil
   fi
 
-  ${reconpre} ln -fs ${installed_dir}/bin/picolisp ${PREFIX}/bin || exit 45
-  ${reconpre} ln -fs ${installed_dir}/bin/pil ${PREFIX}/bin || exit 46
-  ${reconpre} ln -fs ${installed_dir} ${PREFIX}/lib/picolisp || exit 47
-  ${reconpre} ln -fs ${installed_dir}/man/man1/picolisp.1 ${PREFIX}/share/man/man1 || exit 48
-  ${reconpre} ln -fs ${installed_dir}/man/man1/pil.1 ${PREFIX}/share/man/man1 || exit 49
+  _do_relink "${installed_dir}"
 
   [ "${RECON}" ] || echo "done." >&2
+  return
+}
+
+_relink_select () {
+  local choiceno=0
+  local choices=$(ls -1d ${PREFIX}/libexec/picoLisp-* 2>/dev/null |
+                     xargs -n1 basename 2>/dev/null)
+  local numchoices=$(echo ${choices} | xargs -n1 | wc -l)
+  local currentchoice=$(ls -ld ${PREFIX}/lib/picolisp 2>/dev/null |
+                           awk '/^l/{print $NF}' | xargs basename 2>/dev/null)
+
+  if [ -z "${choices}" ]; then
+    echo "Can't relink. No picolisp installs found." >&2
+    exit 51
+  fi
+  if [ ${numchoices} -eq 1 ]; then
+    echo "Found only one picolisp install: ${choices}." >&2
+    echo "Automatically relinking to this one." >&2
+    echo "${choices}"
+    return
+  fi
+
+  # Allow the user to select from a menu of choices.
+  until [ "${choiceno}" -ge 1 ] && [ "${choiceno}" -le "${numchoices}" ]; do
+    echo "Select number corresponding to your choice." >&2
+    echo "" >&2
+    echo ${choices} | xargs -n1 | \
+      awk '{currflag = $0=="'${currentchoice}'" ? "*" : " ";
+            printf("%3d. %s%s\n", ++N, currflag, $0)}' >&2
+    echo "" >&2
+    echo -n "Enter number: " >&2
+    read choiceno
+    echo "" >&2
+  done
+
+  # Return the selection that corresonds to number ${choiceno}.
+  echo ${choices} | xargs -n1 | head -"${choiceno}" | tail -1
+  return
+}
+
+_relink () {
+  local choice=$1
+  [ "${choice}" ] || choice=$(_relink_select)
+  if [ "${choice}" ]; then
+    _do_relink "${PREFIX}/libexec/${choice}"
+  fi
   return
 }
 
@@ -205,6 +251,8 @@ DISTRODIR=${DISTRODIR:-.}
 
 # $BUILDDIR is where you extract your picoLisp distros (tarballs).
 BUILDDIR=${BUILDDIR:-.}
+
+reconpre= && [ "${RECON}" ] && reconpre=echo
 
 case $1 in
  fetch | get)
@@ -215,6 +263,9 @@ case $1 in
   ;;
  install)
   (cd ${BUILDDIR} && _install)
+  ;;
+ relink)
+  _relink
   ;;
  *)
   _print_usage_and_bail

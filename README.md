@@ -11,6 +11,6 @@ This tool helps you organize your picolisp downloads and installations.  It's fa
 
 - `pilot fetch`    downloads the latest distro to `${DISTRODIR}`.
 - `pilot get`      is a synonym for `pilot fetch`.
-- `pilot extract`  extracts the lastest distro (found in `${DISTRODIR}`) into `${BUILDDIR}`.
+- `pilot extract`  extracts the latest distro (found in `${DISTRODIR}`) into `${BUILDDIR}`.
 - `pilot install`  installs the latest build from `${BUILDDIR}` into `${PREFIX}`.
-
+- `pilot relink`   relinks the pil script to a previously installed version of picolisp.
