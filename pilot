@@ -6,7 +6,7 @@ _script_path="${0%/*}"
 _script_name="${0##*/}"
 _system=$(uname -s)
 
-CONFFILE=${CONFFILE-~/.${_script_name}rc}
+CONFFILE=${CONFFILE:-~/.${_script_name}rc}
 [ -r "${CONFFILE}" ] && . "${CONFFILE}"
 
 if [ -z "${DLCMD}" ]; then
@@ -26,7 +26,7 @@ ${_script_name}: there is no download command configured for this script.
 Try something like this and then re-run this script:
 
 cat >> ${CONFFILE}
-DLCMD=\${DLCMD-${_dlcmd_suggest}}
+DLCMD=\${DLCMD:-${_dlcmd_suggest}}
 ^D
 EOF
   exit 2
@@ -38,14 +38,14 @@ ${_script_name}: there is no install prefix configured for this script.
 Try something like this and then re-run this script:
 
 cat >> ${CONFFILE}
-PREFIX=\${PREFIX-/usr/local}
+PREFIX=\${PREFIX:-/usr/local}
 ^D
 EOF
   exit 3
 fi
 
 # The latest picoLisp distro should always be at this URL.
-LATEST_PIL_URL=${LATEST_PIL_URL-http://software-lab.de/picoLisp.tgz}
+LATEST_PIL_URL=${LATEST_PIL_URL:-http://software-lab.de/picoLisp.tgz}
 
 _print_usage_and_bail () {
   cat >&2 <<EOF
@@ -80,9 +80,9 @@ EOF
 _fetch () {
   # This is the pathname of the file in the distro (tarball) that
   # contains the version number.
-  VERSION_FILE_PATH=${VERSION_FILE_PATH-picoLisp/src/vers.h}
+  VERSION_FILE_PATH=${VERSION_FILE_PATH:-picoLisp/src/vers.h}
   # For 64 bit:
-  #VERSION_FILE_PATH=${VERSION_FILE_PATH-picoLisp/src64/version.l}
+  #VERSION_FILE_PATH=${VERSION_FILE_PATH:-picoLisp/src64/version.l}
 
   # Now, download the latest tarball.
   echo "Downloading latest picoLisp distro (tarball)." >&2
@@ -146,7 +146,7 @@ _extract () {
 
   # picoLisp needs GNU make. Help the BSDs out.
   if echo ${_system} | grep BSD >/dev/null; then
-    MAKE=${MAKE-gmake}
+    MAKE=${MAKE:-gmake}
   fi
   MAKE=${MAKE:-make}
   echo "Next steps:" >&2
