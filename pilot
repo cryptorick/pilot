@@ -44,26 +44,40 @@ EOF
   exit 3
 fi
 
+# The latest picoLisp distro should always be at this URL.
+LATEST_PIL_URL=${LATEST_PIL_URL-http://software-lab.de/picoLisp.tgz}
+
 _print_usage_and_bail () {
   cat >&2 <<EOF
 ${_script_name}, version ${_version}
+This tool helps you organize your picolisp downloads and installs.
 
 Usages:
 
-  ${_script_name} fetch  # download latest picolisp distro (tarball) from official server.
-  ${_script_name} get    # same thing :)
+  ${_script_name} fetch    # Download the latest distro to \${DISTRODIR}.
+  ${_script_name} get      # Synonym for \`fetch\`.
 
-  ${_script_name} extract  # extracts the distro downloaded that has the latest version.
-  ${_script_name} install  # install the latest build.
+  ${_script_name} extract  # Extract the lastest distro (found in \${DISTRODIR}) into \${BUILDDIR}.
+
+  ${_script_name} install  # Install the latest build from \${BUILDDIR} into \${PREFIX}.
+
+Configuration:
+(Some of these are defined in ${CONFFILE})
 
 EOF
+  for confvar in DISTRODIR BUILDDIR PREFIX DLCMD LATEST_PIL_URL; do
+    confval=$(eval echo \$${confvar})
+    if [ "${confval}" ]; then
+      echo "  ${confvar}=${confval}" >&2
+    else
+      echo "  (${confvar} is unset.)" >&2
+    fi
+  done
+  echo "" >&2
   exit 0
 }
 
 _fetch () {
-  # The latest picoLisp distro should always be at this URL.
-  LATEST_PIL_URL=${LATEST_PIL_URL-http://software-lab.de/picoLisp.tgz}
-
   # This is the pathname of the file in the distro (tarball) that
   # contains the version number.
   VERSION_FILE_PATH=${VERSION_FILE_PATH-picoLisp/src/vers.h}
@@ -105,6 +119,9 @@ _fetch () {
   local base_tarball_with_version="${base_tarball%.*}-${pil_version}.${base_tarball##*.}"
   mv ${base_tarball} ${base_tarball_with_version}
   echo "Renamed the tarball to ${base_tarball_with_version}." >&2
+  echo "" >&2
+  echo "Next step:" >&2
+  echo "  ${_script_name} extract" >&2
   return
 }
 
@@ -133,8 +150,8 @@ _extract () {
   fi
   MAKE=${MAKE:-make}
   echo "Next steps:" >&2
-  echo "cd ${new_dirname}" >&2
-  echo "(cd src64 && ${MAKE})" >&2
+  echo "  (cd ${new_dirname}/src64 && ${MAKE})" >&2
+  echo "  ${_script_name} install" >&2
   return
 }
 
@@ -149,7 +166,12 @@ _install () {
   }
   install_dir=${install_dir%/}
 
-  local reconpre= && [ "$RECON" ] && reconpre=echo
+  local reconpre=
+  if [ "$RECON" ]; then
+    reconpre=echo
+  else
+    echo "Installing ${install_dir} to ${PREFIX} ..." >&2
+  fi
 
   # Ensure prefix tree.
   ${reconpre} mkdir -p ${PREFIX}/bin ${PREFIX}/lib ${PREFIX}/libexec ${PREFIX}/share/man/man1 || exit 42
@@ -173,6 +195,8 @@ _install () {
   ${reconpre} ln -fs ${installed_dir} ${PREFIX}/lib/picolisp || exit 47
   ${reconpre} ln -fs ${installed_dir}/man/man1/picolisp.1 ${PREFIX}/share/man/man1 || exit 48
   ${reconpre} ln -fs ${installed_dir}/man/man1/pil.1 ${PREFIX}/share/man/man1 || exit 49
+
+  [ "${RECON}" ] || echo "done." >&2
   return
 }
 
@@ -196,4 +220,3 @@ case $1 in
   _print_usage_and_bail
   ;;
 esac
-
