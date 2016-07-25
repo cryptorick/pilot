@@ -150,7 +150,7 @@ _extract () {
   fi
   MAKE=${MAKE:-make}
   echo "Next steps:" >&2
-  echo "  (cd ${new_dirname}/src64 && ${MAKE})" >&2
+  echo "  (cd $PWD/${new_dirname}/src64 && ${MAKE})" >&2
   echo "  ${_script_name} install" >&2
   return
 }
