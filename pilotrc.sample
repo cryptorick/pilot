@@ -1,0 +1,28 @@
+# $DISTRODIR is where you store the distros you download.  It defaults
+# to ".", if left unset.
+#DISTRODIR=~/distros
+
+# $BUILDDIR is where the distros get extracted to.  It defaults to
+# ".", if left unset.
+#BUILDDIR=~/builds
+
+# $DLCMD is the command used to download files.  The command varies
+# from system to system.  DLCMD must be set (there is no default
+# value); the script will not run and nag you until you set it.
+# This one is good for OpenBSD.
+#DLCMD=${DLCMD:-ftp}
+# This one is good for FreeBSD.
+#DLCMD=${DLCMD:-fetch}
+# This one is good for Lunix/others.
+DLCMD="${DLCMD:-curl -O}"
+
+# $PREFIX is where the install target directory.  PREFIX must be set
+# (there is no default value); the script will not run and nag you
+# until you set it.
+# This one is good for installs on a lot of systems.
+#PREFIX=${PREFIX-/usr/local}
+# This one is good for *BSD system installs (because most BSD package
+# managers install to /usr/local; so you may want to avoid that tree).
+#PREFIX=${PREFIX-/opt}
+# This one is good for home installs.
+PREFIX=${PREFIX-~/local}
