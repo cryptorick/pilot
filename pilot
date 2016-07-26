@@ -1,32 +1,32 @@
 #!/bin/sh
 
-_version=20160725
+version=20160726
 
-_script_path="${0%/*}"
-_script_name="${0##*/}"
-_system=$(uname -s)
+#script_path="${0%/*}"
+script_name="${0##*/}"
+system=$(uname -s)
 
-CONFFILE=${CONFFILE:-~/.${_script_name}rc}
+CONFFILE=${CONFFILE:-~/.${script_name}rc}
 [ -r "${CONFFILE}" ] && . "${CONFFILE}"
 
 if [ -z "${DLCMD}" ]; then
-  case ${_system} in
+  case ${system} in
    FreeBSD)
-    _dlcmd_suggest=fetch
+    dlcmd_suggest=fetch
     ;;
    OpenBSD)
-    _dlcmd_suggest=ftp
+    dlcmd_suggest=ftp
     ;;
    *)
-    _dlcmd_suggest="curl -O"
+    dlcmd_suggest="curl -O"
     ;;
   esac
   cat >&2 <<EOF
-${_script_name}: there is no download command configured for this script.
+${script_name}: there is no download command configured for this script.
 Try something like this and then re-run this script:
 
 cat >> ${CONFFILE}
-DLCMD=\${DLCMD:-${_dlcmd_suggest}}
+DLCMD=\${DLCMD:-${dlcmd_suggest}}
 ^D
 EOF
   exit 2
@@ -34,7 +34,7 @@ fi
 
 if [ -z "${PREFIX}" ]; then
   cat >&2 <<EOF
-${_script_name}: there is no install prefix configured for this script.
+${script_name}: there is no install prefix configured for this script.
 Try something like this and then re-run this script:
 
 cat >> ${CONFFILE}
@@ -44,27 +44,26 @@ EOF
   exit 3
 fi
 
-# The latest picoLisp distro should always be at this URL.
-LATEST_PIL_URL=${LATEST_PIL_URL:-http://software-lab.de/picoLisp.tgz}
-
-_print_usage_and_bail () {
+_print_help () {
   cat >&2 <<EOF
-${_script_name}, version ${_version}
+${script_name}, version ${version}
 This tool helps you organize your picolisp downloads and installs.
 
 Usages:
 
-  ${_script_name} fetch    # Download the latest distro to \${DISTRODIR}.
-  ${_script_name} get      # Synonym for \`${_script_name} fetch\`.
-  ${_script_name} extract  # Extract the latest distro (found in \${DISTRODIR}) into \${BUILDDIR}.
-  ${_script_name} install  # Install the latest build from \${BUILDDIR} into \${PREFIX}.
-  ${_script_name} relink   # Relink the pil script to a previously installed version of picolisp.
+  ${script_name} fetch    # Download the latest distro to \${DISTRODIR}.
+  ${script_name} get      # Synonym for \`${script_name} fetch\`.
+  ${script_name} extract  # Extract the latest distro (found in \${DISTRODIR}) into \${BUILDDIR}.
+  ${script_name} install  # Install the latest build from \${BUILDDIR} into \${PREFIX}.
+  ${script_name} relink   # Relink the pil script to a previously installed version of picolisp.
 
 Configuration:
 (Some of these are defined in ${CONFFILE})
 
 EOF
-  for confvar in DISTRODIR BUILDDIR PREFIX DLCMD LATEST_PIL_URL; do
+  local confvars="DISTRODIR BUILDDIR PREFIX DLCMD LATEST_PIL_URL \
+                  WHICH_SOURCES_FOR_VERSION MAKE"
+  for confvar in ${confvars}; do
     confval=$(eval echo \$${confvar})
     if [ "${confval}" ]; then
       echo "  ${confvar}=${confval}" >&2
@@ -73,15 +72,19 @@ EOF
     fi
   done
   echo "" >&2
-  exit 0
 }
 
 _fetch () {
+  mkdir -p "${DISTRODIR}" && cd "${DISTRODIR}"
+
   # This is the pathname of the file in the distro (tarball) that
   # contains the version number.
-  VERSION_FILE_PATH=${VERSION_FILE_PATH:-picoLisp/src/vers.h}
-  # For 64 bit:
-  #VERSION_FILE_PATH=${VERSION_FILE_PATH:-picoLisp/src64/version.l}
+  local version_file_path
+  if [ "${WHICH_SOURCES_FOR_VERSION}" = "32" ]; then
+    version_file_path=picoLisp/src/vers.h
+  else
+    version_file_path=picoLisp/src64/version.l
+  fi
 
   # Now, download the latest tarball.
   echo "Downloading latest picoLisp distro (tarball)." >&2
@@ -92,20 +95,23 @@ _fetch () {
   # Try to extract the pil version from the contents.
   local tmpdir=/tmp/$$-${USER}
   mkdir -p ${tmpdir}
-  tar zxf ${base_tarball} -C ${tmpdir} ${VERSION_FILE_PATH} || {
+  tar zxf ${base_tarball} -C ${tmpdir} ${version_file_path} || {
     echo "Could not extract the version file from the tarball.  Bailing ..." >&2
     echo "(BTW, find the downloaded tarball at ${base_tarball}.)" >&2
     rm -fr ${tmpdir}
     exit 12
   }
-  local version_file=${tmpdir}/${VERSION_FILE_PATH}
-  local pil_version=$(cat ${version_file} |
-                      awk -F'[{}]' '/ Version.+ = /{gsub(/,/,".",$2);print $2}')
-  # For 64 bit:
-  #local pil_version="$(cat ${version_file} |
-  #                     awk -F'[ ()]'
-  #                         '/\(de \*Version/ {
-  #                            v=$4;for(i=5;i<NF;i++)v=v "." $i; print v}')"
+  local version_file=${tmpdir}/${version_file_path}
+  local pil_version
+  if [ "${WHICH_SOURCES_FOR_VERSION}" = "32" ]; then
+    pil_version=$(awk -F'[{}]' '/ Version.+ = / {
+                                  gsub(/,/,".",$2);print $2
+                                }' ${version_file})
+  else
+    pil_version=$(awk -F'[ ()]' '/\(de \*Version/ {
+                                   v=$4;for(i=5;i<NF;i++)v=v "." $i;print v
+                                 }' ${version_file})
+  fi
   [ "${pil_version}" ] || {
     echo "Could not extract the version number from the version file.  Bailing ..." >&2
     echo "(BTW, find the downloaded tarball at ${base_tarball}.)" >&2
@@ -120,18 +126,20 @@ _fetch () {
   echo "Renamed the tarball to ${base_tarball_with_version}." >&2
   echo "" >&2
   echo "Next step:" >&2
-  echo "  ${_script_name} extract" >&2
+  echo "  ${script_name} extract" >&2
   return
 }
 
 _extract () {
+  mkdir -p "${BUILDDIR}" && cd "${BUILDDIR}"
+
   local tarball=$(ls -1d ${DISTRODIR}/picoLisp-*tgz 2>/dev/null |
                      awk -F'[.-]' '{print $2, $3, $4, $0}' |
                      sort -n | awk '{print $NF}' | tail -1)
 
   [ "${tarball}" ] || {
     echo "Expecting to find picolisp distros in \`${DISTRODIR}\`." >&2
-    echo "Found none.  Try \`${_script_name} fetch\` first.  Bailing ..." >&2
+    echo "Found none.  Try \`${script_name} fetch\` first.  Bailing ..." >&2
     exit 21
   }
 
@@ -142,15 +150,11 @@ _extract () {
   rm -fr ${new_dirname}
   tar zxf ${tarball}
   mv picoLisp ${new_dirname}
+  echo "done." >&2
 
-  # picoLisp needs GNU make. Help the BSDs out.
-  if echo ${_system} | grep BSD >/dev/null; then
-    MAKE=${MAKE:-gmake}
-  fi
-  MAKE=${MAKE:-make}
   echo "Next steps:" >&2
   echo "  (cd $PWD/${new_dirname}/src64 && ${MAKE})" >&2
-  echo "  ${_script_name} install" >&2
+  echo "  ${script_name} install" >&2
   return
 }
 
@@ -170,7 +174,7 @@ _install () {
                          sort -n | awk '{print $NF}' | tail -1)
   [ "${install_dir}" ] || {
     echo "Expecting to find picolisp build directories in \`${BUILDDIR}\`." >&2
-    echo "Found none.  Try \`${_script_name} extract\`; then build.  Bailing ..." >&2
+    echo "Found none.  Try \`${script_name} extract\`; then build.  Bailing ..." >&2
     exit 41
   }
   install_dir=${install_dir%/}
@@ -254,20 +258,32 @@ BUILDDIR=${BUILDDIR:-.}
 
 reconpre= && [ "${RECON}" ] && reconpre=echo
 
+# The latest picoLisp distro should always be at this URL.
+LATEST_PIL_URL=${LATEST_PIL_URL:-http://software-lab.de/picoLisp.tgz}
+
+# Which sources to look into find the version string: 32bit or 64bit?
+WHICH_SOURCES_FOR_VERSION=${WHICH_SOURCES_FOR_VERSION:-32}
+
+# picoLisp needs GNU make. Help the BSDs out.
+if echo ${system} | grep BSD >/dev/null; then
+  MAKE=${MAKE:-gmake}
+fi
+MAKE=${MAKE:-make}
+
 case $1 in
  fetch | get)
-  (cd ${DISTRODIR} && _fetch)
+  _fetch
   ;;
  extract)
-  (cd ${BUILDDIR} && _extract)
+  _extract
   ;;
  install)
-  (cd ${BUILDDIR} && _install)
+  _install
   ;;
  relink)
   _relink
   ;;
  *)
-  _print_usage_and_bail
+  _print_help
   ;;
 esac
