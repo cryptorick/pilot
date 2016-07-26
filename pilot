@@ -54,6 +54,7 @@ Usages:
   ${script_name} fetch    # Download the latest distro to \${DISTRODIR}.
   ${script_name} get      # Synonym for \`${script_name} fetch\`.
   ${script_name} extract  # Extract the latest distro (found in \${DISTRODIR}) into \${BUILDDIR}.
+  ${script_name} build    # Start the 64-bit (asm) build in the latest picolisp dir in \${BUILDDIR}.
   ${script_name} install  # Install the latest build from \${BUILDDIR} into \${PREFIX}.
   ${script_name} relink   # Relink the pil script to a previously installed version of picolisp.
 
@@ -152,9 +153,39 @@ _extract () {
   mv picoLisp ${new_dirname}
   echo "done." >&2
 
-  echo "Next steps:" >&2
-  echo "  (cd $PWD/${new_dirname}/src64 && ${MAKE})" >&2
-  echo "  ${script_name} install" >&2
+  echo >&2
+  echo "Next step:" >&2
+  echo "  ${script_name} build" >&2
+  return
+}
+
+_print_latest_extract_dir_path () {
+  local extract_dir=$(ls -1d ${BUILDDIR}/picoLisp-*/ 2>/dev/null |
+                         awk -F'[.-]' '{print $2, $3, $4, $0}' |
+                         sort -n | awk '{print $NF}' | tail -1)
+  [ "${extract_dir}" ] || {
+    echo "Expecting to find picolisp build directories in \`${BUILDDIR}\`." >&2
+    echo "Found none.  Try \`${script_name} extract\`; then build.  Bailing ..." >&2
+    return 1
+  }
+  echo "${extract_dir%/}"
+  return
+}
+
+_build () {
+  local install_dir
+  install_dir=$(_print_latest_extract_dir_path) || exit 31
+
+  if [ "${RECON}" ]; then
+    echo "(cd ${install_dir}/src64 && ${MAKE})"
+  else
+    echo "Attempting to build 64-bit picolisp in ${install_dir}." >&2
+    echo >&2
+    cd ${install_dir}/src64 && ${MAKE}
+    echo >&2
+    echo "Next step:" >&2
+    echo "  ${script_name} install" >&2
+  fi
   return
 }
 
@@ -169,15 +200,8 @@ _do_relink () {
 }
 
 _install () {
-  local install_dir=$(ls -1d ${BUILDDIR}/picoLisp-*/ 2>/dev/null |
-                         awk -F'[.-]' '{print $2, $3, $4, $0}' |
-                         sort -n | awk '{print $NF}' | tail -1)
-  [ "${install_dir}" ] || {
-    echo "Expecting to find picolisp build directories in \`${BUILDDIR}\`." >&2
-    echo "Found none.  Try \`${script_name} extract\`; then build.  Bailing ..." >&2
-    exit 41
-  }
-  install_dir=${install_dir%/}
+  local install_dir
+  install_dir=$(_print_latest_extract_dir_path) || exit 41
 
   [ "$RECON" ] || echo "Installing ${install_dir} to ${PREFIX} ..." >&2
 
@@ -276,6 +300,9 @@ case $1 in
   ;;
  extract)
   _extract
+  ;;
+ build)
+  _build
   ;;
  install)
   _install
