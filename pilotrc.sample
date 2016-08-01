@@ -26,3 +26,8 @@ DLCMD="${DLCMD:-curl -O}"
 #PREFIX=${PREFIX-/opt}
 # This one is good for home installs.
 PREFIX=${PREFIX-~/local}
+
+# The `install` task may need to be privilege-elevated using something
+# like the `sudo` command (on most systems). Set PRIV_ELEVATE_CMD to
+# such a command; leave it unset (default) for home installations.
+#PRIV_ELEVATE_CMD=${PRIV_ELEVATE_CMD:-sudo}

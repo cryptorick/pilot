@@ -1,9 +1,20 @@
 #!/bin/sh
 
-version=20160726
+version=20160731
 
-#script_path="${0%/*}"
 script_name="${0##*/}"
+
+invoked_as="$0"
+if [ "${0##/*}" ]; then  # $0 is relative path.
+  script_path="$(cd ${PWD}/${0%/*} && pwd -P)/${script_name}"
+else  # $0 is absolute path.
+  script_path="$0"
+  if [ "$(command -v ${script_name})" == "$0" ]; then
+    # In this case, assume this script was found on $PATH.
+    invoked_as="${script_name}"
+  fi
+fi
+
 system=$(uname -s)
 
 CONFFILE=${CONFFILE:-~/.${script_name}rc}
@@ -56,6 +67,7 @@ Usages:
   ${script_name} extract  # Extract the latest distro (found in \${DISTRODIR}) into \${BUILDDIR}.
   ${script_name} build    # Start the 64-bit (asm) build in the latest picolisp dir in \${BUILDDIR}.
   ${script_name} install  # Install the latest build from \${BUILDDIR} into \${PREFIX}.
+  ${script_name} update   # Same as \`${script_name} fetch && ${script_name} extract && ${script_name} build && ${script_name} install\`.
   ${script_name} relink   # Relink the pil script to a previously installed version of picolisp.
 
 Configuration:
@@ -63,7 +75,7 @@ Configuration:
 
 EOF
   local confvars="DISTRODIR BUILDDIR PREFIX DLCMD LATEST_PIL_URL \
-                  WHICH_SOURCES_FOR_VERSION MAKE"
+                  WHICH_SOURCES_FOR_VERSION MAKE PRIV_ELEVATE_CMD"
   for confvar in ${confvars}; do
     confval=$(eval echo \$${confvar})
     if [ "${confval}" ]; then
@@ -127,7 +139,7 @@ _fetch () {
   echo "Renamed the tarball to ${base_tarball_with_version}." >&2
   echo "" >&2
   echo "Next step:" >&2
-  echo "  ${script_name} extract" >&2
+  echo "  ${invoked_as} extract" >&2
   return
 }
 
@@ -155,7 +167,7 @@ _extract () {
 
   echo >&2
   echo "Next step:" >&2
-  echo "  ${script_name} build" >&2
+  echo "  ${invoked_as} build" >&2
   return
 }
 
@@ -184,7 +196,7 @@ _build () {
     cd ${install_dir}/src64 && ${MAKE}
     echo >&2
     echo "Next step:" >&2
-    echo "  ${script_name} install" >&2
+    echo "  $(echo ${PRIV_ELEVATE_CMD} ${invoked_as} install)" >&2
   fi
   return
 }
@@ -306,6 +318,9 @@ case $1 in
   ;;
  install)
   _install
+  ;;
+ update)
+  (_fetch) && (_extract) && (_build) && ${PRIV_ELEVATE_CMD} "${script_path}" install
   ;;
  relink)
   _relink
