@@ -1,6 +1,6 @@
 #!/bin/sh
 
-version=20160731
+version=20171001
 
 script_name="${0##*/}"
 
@@ -16,6 +16,7 @@ else  # $0 is absolute path.
 fi
 
 system=$(uname -s)
+machine=$(uname -m)
 
 CONFFILE=${CONFFILE:-~/.${script_name}rc}
 [ -r "${CONFFILE}" ] && . "${CONFFILE}"
@@ -184,7 +185,83 @@ _print_latest_extract_dir_path () {
   return
 }
 
-_build () {
+_build32 () {
+  local install_dir
+  install_dir=$(_print_latest_extract_dir_path) || exit 32
+
+  [ "${RECON}" ] && echo "(cd ${install_dir}/src && ${MAKE})" && return
+
+  echo "Attempting to build 32-bit picolisp in ${install_dir}." >&2
+  echo >&2
+  cd ${install_dir}/src && ${MAKE} || return
+
+  # Save 32-bit version for forensics / because paranoia. :)
+  cp ${install_dir}/bin/picolisp ${install_dir}/bin/picolisp32
+  echo "32-bit picolisp build succeeded!  Moving on to the 64-bit build." >&2
+  echo >&2
+  return
+}
+
+_checkjava () {
+  # If we can't build 32-bit picolisp, see if we can find `java` on
+  # the system so that ersatz can be used in the 64-bit build script.
+
+  [ "${RECON}" ] && echo "which java >/dev/null" && return
+
+  echo "Could NOT build 32-bit picolisp; so now, checking to see if we can" \
+       "invoke java (so that ersatz picolisp will work)." >&2
+  echo >&2
+  if which java >/dev/null; then
+    echo "Found java command; so, moving on to the 64-bit build." >&2
+    echo >&2
+    return 0
+  fi
+  echo "Could NOT find java command." >&2
+  echo >&2
+  return 1
+}
+
+_getsfiles () {
+  local sfilespkg spart mpart
+  local install_dir
+  install_dir=$(_print_latest_extract_dir_path) || exit 33
+
+  # Because this is the way the files are named on the server, we have
+  # to change cases of *some* of the letters in the system name.  For
+  # instance, "FreeBSD" maps to "freeBsd", "Linux" maps to "linux".
+  # Yes, it *is* a bit strange, but the following awk code should
+  # handle the transformation (which is (i) lowercase the first
+  # letter, then (ii) for subsequent letters, lowercase the letter
+  # only if the previous letter was uppercase).
+  spart=$(echo ${system} | awk '{
+    N = split($0, a, "")
+    out = a[1] = tolower(a[1])
+    for (i=2; i<=N; i++)
+	out = out ((a[i-1] ~ /[[:upper:]]/) ? tolower(a[i]) : a[i])
+    print out
+   }')
+  case ${machine} in
+      x86_64 | amd64)
+	  mpart=x86-64
+	  ;;
+      *)  # This should cover arm64 and ppc64
+	  mpart=${machine}
+	  ;;
+  esac
+  sfilespkg=${mpart}.${spart}.tgz
+
+  if [ "${RECON}" ]; then
+    echo "(cd ${install_dir} && ${DLCMD} ${DLURLBASE}/${sfilespkg} && tar" \
+         "zxf ${sfilespkg})"
+  else
+    echo "Attempting to download .s files for ${system} ${mpart}." >&2
+    echo >&2
+    cd ${install_dir} && ${DLCMD} ${DLURLBASE}/${sfilespkg} && tar zxf ${sfilespkg}
+  fi
+  return
+}
+
+_build64 () {
   local install_dir
   install_dir=$(_print_latest_extract_dir_path) || exit 31
 
@@ -193,12 +270,25 @@ _build () {
   else
     echo "Attempting to build 64-bit picolisp in ${install_dir}." >&2
     echo >&2
-    cd ${install_dir}/src64 && ${MAKE}
+    cd ${install_dir}/src64 && ${MAKE} || return
     echo >&2
     echo "Next step:" >&2
     echo "  $(echo ${PRIV_ELEVATE_CMD} ${invoked_as} install)" >&2
   fi
   return
+}
+
+_build () {
+  if [ "${RECON}" ]; then
+    echo "# Check if ONE of these prerequisites is successful:"
+    _build32; echo "# OR"; _checkjava; echo "# OR"; _getsfiles
+    echo "# IF SO THEN proceed to the 64-bit build:"
+    _build64
+  else
+    _build32 || _checkjava || _getsfiles && _build64 && return
+    echo "All prerequisites for the 64-bit build failed!" >&2
+    return 1
+  fi
 }
 
 _do_relink () {
@@ -286,6 +376,8 @@ _relink () {
   return
 }
 
+DLURLBASE=${DLURLBASE:-http://software-lab.de}
+
 # $DISTRODIR is where you put your picoLisp distros (tarballs).
 DISTRODIR=${DISTRODIR:-.}
 
@@ -295,7 +387,7 @@ BUILDDIR=${BUILDDIR:-.}
 reconpre= && [ "${RECON}" ] && reconpre=echo
 
 # The latest picoLisp distro should always be at this URL.
-LATEST_PIL_URL=${LATEST_PIL_URL:-http://software-lab.de/picoLisp.tgz}
+LATEST_PIL_URL=${LATEST_PIL_URL:-${DLURLBASE}/picoLisp.tgz}
 
 # Which sources to look into find the version string: 32bit or 64bit?
 WHICH_SOURCES_FOR_VERSION=${WHICH_SOURCES_FOR_VERSION:-32}
