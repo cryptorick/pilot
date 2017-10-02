@@ -186,12 +186,28 @@ _print_latest_extract_dir_path () {
 }
 
 _build32 () {
-  local install_dir
+  local install_dir multilib_support
   install_dir=$(_print_latest_extract_dir_path) || exit 32
 
   [ "${RECON}" ] && echo "(cd ${install_dir}/src && ${MAKE})" && return
 
   echo "Attempting to build 32-bit picolisp in ${install_dir}." >&2
+
+  # First, if on a 64-bit machine, check for multilib support.
+  if echo "${machine}" | grep -E '64$' >/dev/null; then
+    multilib_support=$(gcc -dumpspecs | sed -n '/multilib_options/{n;p;}')
+    [ "${multilib_support}" ] || {
+      echo "No multilib support found.  Skipping 32-bit build ..." >&2
+      echo >&2
+      return 1
+    }
+    echo "${multilib_support}" | grep 32 >/dev/null || {
+      echo "No 32-bit target arch found.  Skipping 32-bit build ..." >&2
+      echo >&2
+      return 1
+    }
+  fi
+
   echo >&2
   cd ${install_dir}/src && ${MAKE} || return
 
