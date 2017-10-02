@@ -222,12 +222,12 @@ _checkjava () {
   # If we can't build 32-bit picolisp, see if we can find `java` on
   # the system so that ersatz can be used in the 64-bit build script.
 
-  [ "${RECON}" ] && echo "which java >/dev/null" && return
+  [ "${RECON}" ] && echo "which java >/dev/null 2>&1" && return
 
   echo "Could NOT build 32-bit picolisp; so now, checking to see if we can" \
        "invoke java (so that ersatz picolisp will work)." >&2
   echo >&2
-  if which java >/dev/null; then
+  if which java >/dev/null 2>&1; then
     echo "Found java command; so, moving on to the 64-bit build." >&2
     echo >&2
     return 0
