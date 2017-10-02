@@ -293,11 +293,12 @@ _build () {
 
 _do_relink () {
   local installed_dir="$1"
-  ${reconpre} ln -fs ${installed_dir}/bin/picolisp ${PREFIX}/bin || exit 45
-  ${reconpre} ln -fs ${installed_dir}/bin/pil ${PREFIX}/bin || exit 46
-  ${reconpre} ln -fhs ${installed_dir} ${PREFIX}/lib/picolisp || exit 47
-  ${reconpre} ln -fs ${installed_dir}/man/man1/picolisp.1 ${PREFIX}/share/man/man1 || exit 48
-  ${reconpre} ln -fs ${installed_dir}/man/man1/pil.1 ${PREFIX}/share/man/man1 || exit 49
+  ${reconpre} ln -fs ${installed_dir}/bin/picolisp ${PREFIX}/bin || exit 54
+  ${reconpre} ln -fs ${installed_dir}/bin/pil ${PREFIX}/bin || exit 55
+  ${reconpre} rm -f ${PREFIX}/lib/picolisp || exit 56
+  ${reconpre} ln -s ${installed_dir} ${PREFIX}/lib/picolisp || exit 57
+  ${reconpre} ln -fs ${installed_dir}/man/man1/picolisp.1 ${PREFIX}/share/man/man1 || exit 58
+  ${reconpre} ln -fs ${installed_dir}/man/man1/pil.1 ${PREFIX}/share/man/man1 || exit 59
   return
 }
 
