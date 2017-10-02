@@ -160,7 +160,7 @@ _extract () {
   local base_tarball=${tarball##*/}
   local new_dirname=${base_tarball%.tgz}
 
-  echo "Extracting latest picoLisp tarball into current directory ..." >&2
+  echo "Extracting latest picoLisp tarball into ${BUILDDIR}/${new_dirname} ..." >&2
   rm -fr ${new_dirname}
   tar zxf ${tarball}
   mv picoLisp ${new_dirname}
