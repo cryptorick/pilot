@@ -1,6 +1,6 @@
 #!/bin/sh
 
-version=20171001
+version=20171004
 
 script_name="${0##*/}"
 
@@ -149,7 +149,7 @@ _extract () {
 
   local tarball=$(ls -1d ${DISTRODIR}/picoLisp-*tgz 2>/dev/null |
                      awk -F'[.-]' '{print $2, $3, $4, $0}' |
-                     sort -n | awk '{print $NF}' | tail -1)
+                     sort -k1n -k2n -k3n | awk '{print $NF}' | tail -1)
 
   [ "${tarball}" ] || {
     echo "Expecting to find picolisp distros in \`${DISTRODIR}\`." >&2
@@ -175,7 +175,7 @@ _extract () {
 _print_latest_extract_dir_path () {
   local extract_dir=$(ls -1d ${BUILDDIR}/picoLisp-*/ 2>/dev/null |
                          awk -F'[.-]' '{print $2, $3, $4, $0}' |
-                         sort -n | awk '{print $NF}' | tail -1)
+                         sort -k1n -k2n -k3n | awk '{print $NF}' | tail -1)
   [ "${extract_dir}" ] || {
     echo "Expecting to find picolisp build directories in \`${BUILDDIR}\`." >&2
     echo "Found none.  Try \`${script_name} extract\`; then build.  Bailing ..." >&2
