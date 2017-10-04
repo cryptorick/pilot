@@ -57,6 +57,12 @@ EOF
 fi
 
 _print_help () {
+  local buildtype
+  if echo "${machine}" | grep -E '64$' >/dev/null; then
+    buildtype="64-bit"
+  else
+    buildtype="32-bit"
+  fi
   cat >&2 <<EOF
 ${script_name}, version ${version}
 This tool helps you organize your picolisp downloads and installs.
@@ -66,7 +72,7 @@ Usages:
   ${script_name} fetch    # Download the latest distro to \${DISTRODIR}.
   ${script_name} get      # Synonym for \`${script_name} fetch\`.
   ${script_name} extract  # Extract the latest distro (found in \${DISTRODIR}) into \${BUILDDIR}.
-  ${script_name} build    # Start the 64-bit (asm) build in the latest picolisp dir in \${BUILDDIR}.
+  ${script_name} build    # Start the ${buildtype} build in the latest picolisp dir in \${BUILDDIR}.
   ${script_name} install  # Install the latest build from \${BUILDDIR} into \${PREFIX}.
   ${script_name} update   # Same as \`${script_name} fetch && ${script_name} extract && ${script_name} build && ${script_name} install\`.
   ${script_name} relink   # Relink the pil script to a previously installed version of picolisp.
@@ -213,7 +219,11 @@ _build32 () {
 
   # Save 32-bit version for forensics / because paranoia. :)
   cp ${install_dir}/bin/picolisp ${install_dir}/bin/picolisp32
-  echo "32-bit picolisp build succeeded!  Moving on to the 64-bit build." >&2
+  if echo "${machine}" | grep -E '64$' >/dev/null; then
+    echo "32-bit picolisp build succeeded!  Moving on to the 64-bit build." >&2
+  else
+    echo "32-bit picolisp build succeeded!" >&2
+  fi
   echo >&2
   return
 }
@@ -224,8 +234,8 @@ _checkjava () {
 
   [ "${RECON}" ] && echo "which java >/dev/null 2>&1" && return
 
-  echo "Could NOT build 32-bit picolisp; so now, checking to see if we can" \
-       "invoke java (so that ersatz picolisp will work)." >&2
+  echo "Now, checking to see if we can invoke java (so that ersatz picolisp" \
+       "will work)." >&2
   echo >&2
   if which java >/dev/null 2>&1; then
     echo "Found java command; so, moving on to the 64-bit build." >&2
@@ -287,24 +297,32 @@ _build64 () {
     echo "Attempting to build 64-bit picolisp in ${install_dir}." >&2
     echo >&2
     cd ${install_dir}/src64 && ${MAKE} || return
-    echo >&2
-    echo "Next step:" >&2
-    echo "  $(echo ${PRIV_ELEVATE_CMD} ${invoked_as} install)" >&2
   fi
   return
 }
 
 _build () {
-  if [ "${RECON}" ]; then
-    echo "# Check if ONE of these prerequisites is successful:"
-    _build32; echo "# OR"; _checkjava; echo "# OR"; _getsfiles
-    echo "# IF SO THEN proceed to the 64-bit build:"
-    _build64
+  if echo "${machine}" | grep -E '64$' >/dev/null; then
+    if [ "${RECON}" ]; then
+      echo "# Check if ONE of these prerequisites is successful:"
+      _build32; echo "# OR"; _checkjava; echo "# OR"; _getsfiles
+      echo "# IF SO THEN proceed to the 64-bit build:"
+      _build64
+    else
+      _build32 || _checkjava || _getsfiles || {
+        echo "All prerequisites for the 64-bit build failed!" >&2
+        return 1
+      }
+      _build64 || return
+    fi
   else
-    _build32 || _checkjava || _getsfiles && _build64 && return
-    echo "All prerequisites for the 64-bit build failed!" >&2
-    return 1
+    # If NOT on a 64-bit machine, only perform the 32-bit build.
+    _build32 || return
   fi
+  echo >&2
+  echo "Next step:" >&2
+  echo "  $(echo ${PRIV_ELEVATE_CMD} ${invoked_as} install)" >&2
+  return
 }
 
 _do_relink () {
