@@ -9,7 +9,7 @@ if [ "${0##/*}" ]; then  # $0 is relative path.
   script_path="$(cd ${PWD}/${0%/*} && pwd -P)/${script_name}"
 else  # $0 is absolute path.
   script_path="$0"
-  if [ "$(command -v ${script_name})" == "$0" ]; then
+  if [ "$(command -v ${script_name})" = "$0" ]; then
     # In this case, assume this script was found on $PATH.
     invoked_as="${script_name}"
   fi
