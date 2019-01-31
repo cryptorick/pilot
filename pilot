@@ -1,6 +1,6 @@
 #!/bin/sh
 
-version=20171004
+version=20190131
 
 script_name="${0##*/}"
 
@@ -92,6 +92,10 @@ EOF
     fi
   done
   echo "" >&2
+}
+
+_isfreebsdpre12 () {
+  [ $(uname -s) = "FreeBSD" ] && [ $(uname -r | sed 's/\..*$//') -lt 12 ]
 }
 
 _fetch () {
@@ -276,13 +280,29 @@ _getsfiles () {
   esac
   sfilespkg=${mpart}.${spart}.tgz
 
+  # FreeBSD changed stat(2) from version 11 to version 12.  Your
+  # author is keeping the old .s files, that correspond to FreeBSD
+  # systems before version 12, on github (for now).  So, we need to
+  # check if the user is running FreeBSD before version 12, and if so,
+  # point you to these older code files.
+  #
+  # Just an FYI: The FreeBSD project's backward-compatibility breaking
+  # commit can be found here (entitled "Commit the 64-bit inode
+  # project."):
+  # https://github.com/freebsd/freebsd/commit/e75ba1d5c4c79376a78351c8544388491db49664
+  if _isfreebsdpre12; then
+    SDLURLBASE="https://raw.githubusercontent.com/cryptorick/pilot/master/misc/pre-freebsd-12"
+  else
+    SDLURLBASE="${DLURLBASE}"
+  fi
+
   if [ "${RECON}" ]; then
-    echo "(cd ${install_dir} && ${DLCMD} ${DLURLBASE}/${sfilespkg} && tar" \
+    echo "(cd ${install_dir} && ${DLCMD} ${SDLURLBASE}/${sfilespkg} && tar" \
          "zxf ${sfilespkg})"
   else
     echo "Attempting to download .s files for ${system} ${mpart}." >&2
     echo >&2
-    cd ${install_dir} && ${DLCMD} ${DLURLBASE}/${sfilespkg} && tar zxf ${sfilespkg}
+    cd ${install_dir} && ${DLCMD} ${SDLURLBASE}/${sfilespkg} && tar zxf ${sfilespkg}
   fi
   return
 }
@@ -304,15 +324,29 @@ _build64 () {
 _build () {
   if echo "${machine}" | grep -E '64$' >/dev/null; then
     if [ "${RECON}" ]; then
-      echo "# Check if ONE of these prerequisites is successful:"
-      _build32; echo "# OR"; _checkjava; echo "# OR"; _getsfiles
+      if _isfreebsdpre12; then
+        echo "# Check if this prerequisite is successful:"
+        _getsfiles
+      else      
+        echo "# Check if ONE of these prerequisites is successful:"
+        _build32; echo "# OR"; _checkjava; echo "# OR"; _getsfiles
+      fi
       echo "# IF SO THEN proceed to the 64-bit build:"
       _build64
     else
-      _build32 || _checkjava || _getsfiles || {
-        echo "All prerequisites for the 64-bit build failed!" >&2
-        return 1
-      }
+      if _isfreebsdpre12; then
+        # if FreeBSD version < 12, don't bother building .s files; get
+        # the older ones (this happens in _getsfiles()).
+        _getsfiles || {
+          echo "All prerequisites for the 64-bit build failed!" >&2
+          return 1
+        }
+      else      
+        _build32 || _checkjava || _getsfiles || {
+          echo "All prerequisites for the 64-bit build failed!" >&2
+          return 1
+        }
+      fi
       _build64 || return
     fi
   else
