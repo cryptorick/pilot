@@ -1,6 +1,6 @@
 #!/bin/sh
 
-version=20171004
+version=20190607
 
 script_name="${0##*/}"
 
@@ -351,13 +351,16 @@ _install () {
   ${reconpre} rm -fr ${installed_dir} || exit 43
   ${reconpre} cp -R ${install_dir} ${PREFIX}/libexec || exit 44
 
-  # The prefix `/usr` is hard-wired into the official `pil` script; so
-  # we need to jack in our prefix ${PREFIX}.
-  if [ "${RECON}" ]; then
-    echo sed "'s?/usr?${PREFIX}?g'" ${install_dir}/bin/pil \> ${installed_dir}/bin/pil
-  else
-    sed 's?/usr?'${PREFIX}'?g' ${install_dir}/bin/pil > ${installed_dir}/bin/pil
-  fi
+  # Change the hard-wired hashbang lines, by jacking in ${PREFIX}.
+  local files_to_be_jacked=$(grep -rl '#!/usr/bin/picolisp' ${install_dir} |
+                                 sed "s?${install_dir}/??")
+  for f in ${files_to_be_jacked}; do
+    if [ "${RECON}" ]; then
+      echo sed "'s?/usr?${PREFIX}?g'" ${install_dir}/$f \> ${installed_dir}/$f
+    else
+      sed 's?/usr?'${PREFIX}'?g' ${install_dir}/$f > ${installed_dir}/$f
+    fi
+  done
 
   _do_relink "${installed_dir}"
 
