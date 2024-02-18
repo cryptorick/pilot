@@ -1,6 +1,6 @@
 #!/bin/sh
 
-version=20190607
+version=20240218
 
 script_name="${0##*/}"
 
@@ -100,11 +100,7 @@ _fetch () {
   # This is the pathname of the file in the distro (tarball) that
   # contains the version number.
   local version_file_path
-  if [ "${WHICH_SOURCES_FOR_VERSION}" = "32" ]; then
-    version_file_path=picoLisp/src/vers.h
-  else
-    version_file_path=picoLisp/src64/version.l
-  fi
+  version_file_path=pil21/src/vers.l
 
   # Now, download the latest tarball.
   echo "Downloading latest picoLisp distro (tarball)." >&2
@@ -123,15 +119,10 @@ _fetch () {
   }
   local version_file=${tmpdir}/${version_file_path}
   local pil_version
-  if [ "${WHICH_SOURCES_FOR_VERSION}" = "32" ]; then
-    pil_version=$(awk -F'[{}]' '/ Version.+ = / {
-                                  gsub(/,/,".",$2);print $2
-                                }' ${version_file})
-  else
-    pil_version=$(awk -F'[ ()]' '/\(de \*Version/ {
-                                   v=$4;for(i=5;i<NF;i++)v=v "." $i;print v
-                                 }' ${version_file})
-  fi
+  pil_version=$(awk -F'[ ()]' '/de \*Version/ {
+                                 v=$4;for(i=5;i<NF;i++)v=v "." $i;print v
+                               }' ${version_file})
+
   [ "${pil_version}" ] || {
     echo "Could not extract the version number from the version file.  Bailing ..." >&2
     echo "(BTW, find the downloaded tarball at ${base_tarball}.)" >&2
@@ -153,7 +144,7 @@ _fetch () {
 _extract () {
   mkdir -p "${BUILDDIR}" && cd "${BUILDDIR}"
 
-  local tarball=$(ls -1d ${DISTRODIR}/picoLisp-*tgz 2>/dev/null |
+  local tarball=$(ls -1d ${DISTRODIR}/pil21-*tgz 2>/dev/null |
                      awk -F'[.-]' '{print $2, $3, $4, $0}' |
                      sort -k1n -k2n -k3n | awk '{print $NF}' | tail -1)
 
@@ -169,7 +160,7 @@ _extract () {
   echo "Extracting latest picoLisp tarball into ${BUILDDIR}/${new_dirname} ..." >&2
   rm -fr ${new_dirname}
   tar zxf ${tarball}
-  mv picoLisp ${new_dirname}
+  mv pil21 ${new_dirname}
   echo "done." >&2
 
   echo >&2
@@ -179,7 +170,7 @@ _extract () {
 }
 
 _print_latest_extract_dir_path () {
-  local extract_dir=$(ls -1d ${BUILDDIR}/picoLisp-*/ 2>/dev/null |
+  local extract_dir=$(ls -1d ${BUILDDIR}/pil21-*/ 2>/dev/null |
                          awk -F'[.-]' '{print $2, $3, $4, $0}' |
                          sort -k1n -k2n -k3n | awk '{print $NF}' | tail -1)
   [ "${extract_dir}" ] || {
@@ -292,33 +283,17 @@ _build64 () {
   install_dir=$(_print_latest_extract_dir_path) || exit 31
 
   if [ "${RECON}" ]; then
-    echo "(cd ${install_dir}/src64 && ${MAKE})"
+    echo "(cd ${install_dir}/src && ${MAKE})"
   else
     echo "Attempting to build 64-bit picolisp in ${install_dir}." >&2
     echo >&2
-    cd ${install_dir}/src64 && ${MAKE} || return
+    cd ${install_dir}/src && ${MAKE} || return
   fi
   return
 }
 
 _build () {
-  if echo "${machine}" | grep -E '64$' >/dev/null; then
-    if [ "${RECON}" ]; then
-      echo "# Check if ONE of these prerequisites is successful:"
-      _build32; echo "# OR"; _checkjava; echo "# OR"; _getsfiles
-      echo "# IF SO THEN proceed to the 64-bit build:"
-      _build64
-    else
-      _build32 || _checkjava || _getsfiles || {
-        echo "All prerequisites for the 64-bit build failed!" >&2
-        return 1
-      }
-      _build64 || return
-    fi
-  else
-    # If NOT on a 64-bit machine, only perform the 32-bit build.
-    _build32 || return
-  fi
+  _build64 || return
   echo >&2
   echo "Next step:" >&2
   echo "  $(echo ${PRIV_ELEVATE_CMD} ${invoked_as} install)" >&2
@@ -328,7 +303,7 @@ _build () {
 _do_relink () {
   local installed_dir="$1"
   ${reconpre} ln -fs ${installed_dir}/bin/picolisp ${PREFIX}/bin || exit 54
-  for f in $(grep -l '#!'"${PREFIX}/bin/picolisp" ${installed_dir}/bin/*); do
+  for f in $(grep -l '#!'"${PREFIX}/bin/" ${installed_dir}/bin/*); do
     ${reconpre} ln -fs ${f} ${PREFIX}/bin || exit 55
   done
   ${reconpre} rm -f ${PREFIX}/lib/picolisp || exit 56
@@ -354,7 +329,7 @@ _install () {
   ${reconpre} cp -R ${install_dir} ${PREFIX}/libexec || exit 44
 
   # Change the hard-wired hashbang lines, by jacking in ${PREFIX}.
-  local files_to_be_jacked=$(grep -rl '#!/usr/bin/picolisp' ${install_dir} |
+  local files_to_be_jacked=$(grep -rl '#!/usr/bin/' ${install_dir} |
                                  sed "s?${install_dir}/??")
   for f in ${files_to_be_jacked}; do
     if [ "${RECON}" ]; then
@@ -372,7 +347,7 @@ _install () {
 
 _relink_select () {
   local choiceno=0
-  local choices=$(ls -1d ${PREFIX}/libexec/picoLisp-* 2>/dev/null |
+  local choices=$(ls -1d ${PREFIX}/libexec/picoLisp-* ${PREFIX}/libexec/pil21-* 2>/dev/null |
                      xargs -n1 basename 2>/dev/null)
   local numchoices=$(echo ${choices} | xargs -n1 | wc -l)
   local currentchoice=$(ls -ld ${PREFIX}/lib/picolisp 2>/dev/null |
@@ -427,7 +402,7 @@ BUILDDIR=${BUILDDIR:-.}
 reconpre= && [ "${RECON}" ] && reconpre=echo
 
 # The latest picoLisp distro should always be at this URL.
-LATEST_PIL_URL=${LATEST_PIL_URL:-${DLURLBASE}/picoLisp.tgz}
+LATEST_PIL_URL=${LATEST_PIL_URL:-${DLURLBASE}/pil21.tgz}
 
 # Which sources to look into find the version string: 32bit or 64bit?
 WHICH_SOURCES_FOR_VERSION=${WHICH_SOURCES_FOR_VERSION:-32}
