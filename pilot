@@ -372,7 +372,7 @@ _install () {
 
 _relink_select () {
   local choiceno=0
-  local choices=$(ls -1d ${PREFIX}/libexec/picoLisp-* 2>/dev/null |
+  local choices=$(ls -1d ${PREFIX}/libexec/picoLisp-* ${PREFIX}/libexec/pil21-* 2>/dev/null |
                      xargs -n1 basename 2>/dev/null)
   local numchoices=$(echo ${choices} | xargs -n1 | wc -l)
   local currentchoice=$(ls -ld ${PREFIX}/lib/picolisp 2>/dev/null |
